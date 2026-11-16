@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stazioni CC">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b2a5b">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Stazioni Carabinieri – Langhe e Roero</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --blu: #0b2a5b;
+    --rosso: #c8102e;
+    --oro: #b8860b;
+    --verde: #1f6f4a;
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --testo: #1b1f27;
+    --muted: #5d6676;
+    --bordo: #d8dce3;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--testo); background: var(--bg); }
+  body { display: flex; flex-direction: column; }
+  .app { display: grid; grid-template-columns: 340px 1fr; flex: 1; min-height: 0; }
+  aside { background: var(--card); border-right: 1px solid var(--bordo); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; z-index: 1000; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  header { padding: 16px 16px 12px; border-bottom: 1px solid var(--bordo); }
+  header h1 { font-size: 17px; margin: 0 0 2px; color: var(--blu); }
+  header p { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .legenda { padding: 12px 16px; border-bottom: 1px solid var(--bordo); display: grid; gap: 8px; }
+  .legenda label { display: flex; align-items: center; gap: 10px; font-size: 13.5px; cursor: pointer; user-select: none; }
+  .legenda input { accent-color: var(--blu); width: 16px; height: 16px; }
+  .lista { flex: none; }
+  .riga { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid #eceef2; cursor: pointer; font-size: 14px; }
+  .riga .sel { accent-color: var(--blu); width: 16px; height: 16px; flex: none; cursor: pointer; margin: 0; }
+  .riga:hover { background: #eef2fa; }
+  .riga small { display: block; color: var(--muted); font-size: 11.5px; }
+  .riga .nome { flex: 1; }
+  .riga .mini { display: flex; gap: 4px; }
+  .mini svg { width: 20px; height: 20px; }
+  .nota { padding: 10px 16px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--bordo); line-height: 1.45; }
+  #map { height: 100%; width: 100%; }
+
+  .pin { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45); }
+  .pin svg { width: 19px; height: 19px; }
+  .pin.caserma { background: var(--blu); }
+  .pin.caserma.compagnia { background: var(--rosso); width: 34px; height: 34px; }
+  .pin.caserma.compagnia svg { width: 22px; height: 22px; }
+  .pin.comune { background: var(--oro); border-radius: 50%; }
+
+  .popup h3 { margin: 0 0 4px; font-size: 14.5px; color: var(--blu); }
+  .popup .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; color: #fff; margin-bottom: 6px; }
+  .popup .tag.caserma { background: var(--blu); }
+  .popup .tag.compagnia { background: var(--rosso); }
+  .popup .tag.comune { background: var(--oro); }
+  .popup p { margin: 2px 0; font-size: 12.5px; }
+  .popup .ind { color: var(--muted); font-size: 11.5px; font-style: italic; }
+  .leaflet-tooltip.etichetta { font-weight: 600; font-size: 12px; }
+
+  /* ---- percorsi ---- */
+  .percorsi { padding: 12px 16px; border-bottom: 1px solid var(--bordo); }
+  .percorsi h2 { font-size: 12px; margin: 0 0 8px; color: var(--blu); text-transform: uppercase; letter-spacing: .05em; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--blu); border-radius: 8px; overflow: hidden; }
+  .seg button { padding: 7px 6px; border: 0; background: #fff; color: var(--blu); font: 600 12.5px system-ui, sans-serif; cursor: pointer; }
+  .seg button.on { background: var(--blu); color: #fff; }
+  .azioni { display: flex; gap: 8px; margin: 8px 0 4px; }
+  .azioni button { flex: 1; padding: 6px; border: 1px solid var(--bordo); border-radius: 6px; background: #fff; font-size: 12.5px; cursor: pointer; color: var(--testo); }
+  .azioni button:hover { background: #eef2fa; }
+  .aiuto { font-size: 11.5px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
+  .stato { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 16px; line-height: 1.4; }
+  .stato.err { color: var(--rosso); }
+  .risultati { margin-top: 6px; }
+  .risultati ol { list-style: none; padding: 0; margin: 6px 0 0; }
+  .risultati li { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
+  .risultati .t { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .risultati .tratto { margin: 0 0 0 28px; padding: 0; font-size: 11.5px; color: var(--muted); display: block; }
+  .num { width: 20px; height: 20px; border-radius: 50%; background: var(--rosso); color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.3); }
+  .totale { margin-top: 8px; padding: 8px 10px; background: #eef2fa; border-radius: 8px; font-size: 13px; line-height: 1.45; }
+  .badge { width: 20px; height: 20px; border-radius: 50%; background: #fff; color: var(--rosso); border: 2px solid var(--rosso); font: 700 11px system-ui, sans-serif; display: grid; place-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+  .badge.p { background: var(--rosso); color: #fff; border-color: #fff; }
+  .dur { position: absolute; transform: translate(-50%, -50%); background: var(--c, #333); color: #fff; font: 700 11.5px system-ui, sans-serif; padding: 2px 7px; border-radius: 10px; border: 2px solid #fff; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+
+  /* ---- tab ---- */
+  .tabs { display: flex; gap: 4px; padding: calc(8px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); background: var(--blu); flex: none; }
+  .tab { border: 0; background: transparent; color: #cdd6ea; font: 600 13.5px system-ui, sans-serif; padding: 9px 16px; border-radius: 8px 8px 0 0; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .tab:hover { color: #fff; }
+  .tab.on { background: var(--bg); color: var(--blu); }
+  .tbadge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--rosso); color: #fff; font-size: 11.5px; display: grid; place-items: center; }
+  .tbadge.ok { background: var(--verde); }
+  .tbadge:empty { display: none; }
+  .app.off, .isp.off { display: none; }
+
+  /* ---- ispezioni mensili ---- */
+  .isp { flex: 1; min-height: 0; overflow-y: auto; padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+  .isp-in { max-width: 1000px; margin: 0 auto; display: grid; gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--bordo); border-radius: 12px; padding: 14px 16px; }
+  .isp-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .isp-top h2 { margin: 0; font-size: 17px; color: var(--blu); }
+  .isp-top .sott { font-size: 12.5px; color: var(--muted); flex-basis: 100%; margin-top: -6px; }
+  .anno { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .anno b { min-width: 52px; text-align: center; font-size: 15px; }
+  .btn { border: 1px solid var(--bordo); background: #fff; border-radius: 8px; padding: 6px 11px; font: 13px system-ui, sans-serif; cursor: pointer; color: var(--testo); }
+  .btn:hover { background: #eef2fa; }
+  .btn.pericolo { background: var(--rosso); border-color: var(--rosso); color: #fff; }
+  .promemoria { margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; line-height: 1.5; background: #fff4e0; border: 1px solid #f0d3a0; color: #6b4a00; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .promemoria > span { flex: 1; min-width: 220px; }
+  .promemoria.ok { background: #e6f4ec; border-color: #b8dcc7; color: #14543a; }
+  .mesi { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .mese { border: 1px solid var(--bordo); background: #fff; border-radius: 10px; padding: 9px 11px 10px; text-align: left; cursor: pointer; font: inherit; color: var(--testo); }
+  .mese:hover { border-color: var(--blu); }
+  .mese .m { font-weight: 600; font-size: 13.5px; display: block; }
+  .mese .c { font-size: 11.5px; color: var(--muted); display: block; margin: 1px 0 7px; }
+  .mese .barra { display: block; height: 4px; border-radius: 2px; background: #e6e9ef; overflow: hidden; }
+  .mese .barra i { display: block; height: 100%; background: var(--blu); }
+  .mese.cur { border-color: var(--rosso); box-shadow: inset 0 0 0 1px var(--rosso); }
+  .mese.cur .m::after { content: "\25CF"; color: var(--rosso); margin-left: 6px; font-size: 10px; }
+  .mese.fatto .barra i { background: var(--verde); }
+  .mese.fatto .c { color: var(--verde); font-weight: 600; }
+  .mese.on { background: var(--blu); border-color: var(--blu); color: #fff; }
+  .mese.on .c { color: #cdd6ea; }
+  .mese.on .barra { background: rgba(255,255,255,.25); }
+  .mese.on .barra i { background: #fff; }
+  .mese.on.cur .m::after { color: #ff8a9b; }
+  .legenda-mesi { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  .dett-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+  .dett-head h3 { margin: 0; font-size: 16px; color: var(--blu); }
+  .prog { flex: 1; min-width: 180px; font-size: 12.5px; color: var(--muted); }
+  .prog .barra { height: 6px; border-radius: 3px; background: #e6e9ef; overflow: hidden; margin-top: 4px; }
+  .prog .barra i { display: block; height: 100%; background: var(--verde); }
+  .filtro { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }
+  .filtro input { accent-color: var(--blu); width: 16px; height: 16px; }
+  .grid-voci { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px; }
+  .gruppo { border: 1px solid var(--bordo); border-radius: 10px; background: #fff; overflow: hidden; align-self: start; }
+  .gruppo.fatto { background: #f3faf6; border-color: #b8dcc7; }
+  .voce { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 14px; }
+  .voce + .voce { border-top: 1px dashed #e3e6ec; }
+  .voce.p { padding-left: 40px; font-size: 13.5px; }
+  .voce input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--verde); flex: none; cursor: pointer; margin: 0; }
+  .voce label { flex: 1; cursor: pointer; }
+  .voce.s label { font-weight: 600; }
+  .voce.on label { color: var(--muted); }
+  .voce .data { display: none; font: 12px system-ui, sans-serif; border: 1px solid var(--bordo); border-radius: 6px; padding: 2px 6px; color: var(--muted); background: #fff; }
+  .voce.on .data { display: block; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 1px 7px; margin-left: 6px; border-radius: 999px; background: var(--rosso); color: #fff; vertical-align: 1px; }
+  .vuoto { padding: 18px; text-align: center; color: var(--verde); font-weight: 600; grid-column: 1 / -1; }
+  .strumenti { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .strumenti .msg { font-size: 12.5px; color: var(--muted); flex-basis: 100%; min-height: 16px; }
+  .strumenti .msg.err { color: var(--rosso); }
+  .avviso-storage { font-size: 12.5px; padding: 8px 12px; border-radius: 8px; background: #fdecea; border: 1px solid #f3b9b3; color: #8a1c13; }
+  @media (max-width: 760px) {
+    .mesi { grid-template-columns: repeat(3, 1fr); }
+    .grid-voci { grid-template-columns: 1fr; }
+    .anno { margin-left: 0; }
+  }
+
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 46% 54%; }
+    aside { order: 2; border-right: 0; border-top: 1px solid var(--bordo); }
+    .mappa-wrap { order: 1; }
+  }
+</style>
+</head>
+<body>
+<nav class="tabs" role="tablist">
+  <button type="button" class="tab on" id="tab-mappa" role="tab" aria-selected="true">Mappa e percorsi</button>
+  <button type="button" class="tab" id="tab-isp" role="tab" aria-selected="false">Ispezioni mensili <span class="tbadge" id="isp-badge"></span></button>
+</nav>
+<div class="app">
+  <aside>
+    <header>
+      <h1>Stazioni Carabinieri · Langhe e Roero</h1>
+      <p>Compagnia di Alba e 10 Stazioni, con le sedi dei rispettivi Comuni</p>
+    </header>
+    <div class="legenda">
+      <label><input type="checkbox" id="chk-caserme" checked>
+        <span class="mini" style="display:flex"><span id="leg-caserma"></span></span> Caserme (Stazioni CC)</label>
+      <label><input type="checkbox" id="chk-comuni" checked>
+        <span class="mini" style="display:flex"><span id="leg-comune"></span></span> Sedi comunali (municipi)</label>
+      <label><input type="checkbox" id="chk-etichette">
+        <span style="width:20px"></span> Mostra i nomi sulla mappa</label>
+    </div>
+    <div class="percorsi">
+      <h2>Percorsi in auto da Alba</h2>
+      <div class="seg">
+        <button type="button" id="m-singoli" class="on">Percorsi singoli</button>
+        <button type="button" id="m-giro">Giro ottimizzato</button>
+      </div>
+      <div class="azioni">
+        <button type="button" id="sel-tutte">Seleziona tutte</button>
+        <button type="button" id="sel-nessuna">Nascondi tutti</button>
+      </div>
+      <p class="aiuto" id="aiuto"></p>
+      <div class="stato" id="stato"></div>
+      <div class="risultati" id="risultati"></div>
+    </div>
+    <div class="lista" id="lista"></div>
+    <div class="nota">
+      Le caserme di Bossolasco, Corneliano, Cortemilia, Monesiglio, Saliceto e Santo Stefano Belbo usano coordinate esatte. Le altre caserme e tutti i municipi hanno una posizione indicativa (possibile scarto di diverse centinaia di metri): il popup lo segnala.
+    </div>
+  </aside>
+  <div class="mappa-wrap"><div id="map"></div></div>
+</div>
+
+<main class="isp off" id="isp">
+  <div class="isp-in">
+    <section class="card">
+      <div class="isp-top">
+        <h2>Ispezioni mensili · Stazioni e Pattuglie</h2>
+        <div class="anno">
+          <button type="button" class="btn" id="anno-prec" aria-label="Anno precedente">&#8249;</button>
+          <b id="isp-anno"></b>
+          <button type="button" class="btn" id="anno-succ" aria-label="Anno successivo">&#8250;</button>
+        </div>
+        <div class="sott">Ogni mese ha il suo elenco: spunta la voce quando l&rsquo;ispezione è fatta (la data si può correggere).</div>
+      </div>
+      <div class="promemoria" id="promemoria"></div>
+    </section>
+    <section>
+      <div class="mesi" id="mesi"></div>
+      <div class="legenda-mesi"><span style="color:var(--rosso)">&#9679;</span> mese in corso</div>
+    </section>
+    <section class="card">
+      <div class="dett-head">
+        <h3 id="dett-titolo"></h3>
+        <div class="prog"><span id="dett-prog"></span><div class="barra"><i id="dett-barra"></i></div></div>
+        <label class="filtro"><input type="checkbox" id="solo-da-fare"> Mostra solo da fare</label>
+      </div>
+      <div class="grid-voci" id="elenco"></div>
+    </section>
+    <section class="card strumenti">
+      <button type="button" class="btn" id="isp-esporta">Salva copia (.json)</button>
+      <button type="button" class="btn" id="isp-importa">Ripristina copia</button>
+      <input type="file" id="isp-file" accept="application/json,.json" hidden>
+      <button type="button" class="btn" id="isp-azzera">Azzera questo mese</button>
+      <div class="msg" id="isp-msg"></div>
+      <div class="avviso-storage" id="isp-storage" hidden>Il browser non consente di salvare i dati in questa pagina: le spunte andranno perse alla chiusura. Usa &laquo;Salva copia&raquo; per conservarle.</div>
+    </section>
+  </div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ---------- Simboli (SVG inline) ---------- */
+const SVG_CASERMA = `
+<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+  <path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/>
+  <path d="M12 5V2.5"/><path d="M12 2.5h4l-1.2 1.3L16 5h-4" fill="#fff"/>
+  <path d="M10 21v-5h4v5"/><path d="M8 11.5h1.5M14.5 11.5H16"/>
+</svg>`;
+const SVG_COMUNE = `
+<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+  <path d="M3 9.5 12 4l9 5.5"/><path d="M4.5 9.5h15"/>
+  <path d="M6 10v8M10 10v8M14 10v8M18 10v8"/><path d="M3.5 20h17"/>
+</svg>`;
+
+function icona(tipo, compagnia) {
+  const cls = tipo === 'caserma' ? `pin caserma${compagnia ? ' compagnia' : ''}` : 'pin comune';
+  const size = compagnia ? 34 : 30;
+  // la caserma è spostata a sinistra, il municipio a destra, per non sovrapporli ai livelli di zoom bassi
+  const anchor = tipo === 'caserma' ? [size - 4, size / 2] : [4, size / 2];
+  return L.divIcon({
+    className: '',
+    html: `<div class="${cls}">${tipo === 'caserma' ? SVG_CASERMA : SVG_COMUNE}</div>`,
+    iconSize: [size, size],
+    iconAnchor: anchor,
+    popupAnchor: [tipo === 'caserma' ? -(size / 2 - 4) : (size / 2 - 4), -size / 2],
+    tooltipAnchor: [tipo === 'caserma' ? -(size / 2 - 4) : (size / 2 - 4), 0]
+  });
+}
+document.getElementById('leg-caserma').innerHTML =
+  `<div class="pin caserma" style="width:22px;height:22px;border-radius:6px"><svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${SVG_CASERMA.replace(/<\/?svg[^>]*>/g,'')}</svg></div>`;
+document.getElementById('leg-comune').innerHTML =
+  `<div class="pin comune" style="width:22px;height:22px"><svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${SVG_COMUNE.replace(/<\/?svg[^>]*>/g,'')}</svg></div>`;
+
+/* ---------- Dati ----------
+   addrStazione / addrComune: indirizzi forniti dall'utente o confermati da fonti consultate.
+   cEsatta: true  -> coordinate della caserma fornite dall'utente;
+   cEsatta: false -> coordinate stimate (posizione indicativa).
+   Le coordinate dei municipi sono sempre stimate. */
+const SEDI = [
+  { comune: 'Alba', compagnia: true,
+    caserma: [44.6972, 8.0342], municipio: [44.7003, 8.0356], cEsatta: false,
+    addrStazione: 'Via Generale Carlo Alberto Dalla Chiesa 1', addrComune: 'Piazza Risorgimento 1' },
+  { comune: 'Bossolasco',
+    caserma: [44.53255123, 8.04711523], municipio: [44.5337, 8.0557], cEsatta: true,
+    addrStazione: 'Corso Paolo della Valle', addrComune: 'Piazza Oberto 2' },
+  { comune: 'Corneliano d\u2019Alba',
+    caserma: [44.73571758, 7.95464435], municipio: [44.7352, 7.9497], cEsatta: true,
+    addrStazione: 'Corso Guglielmo Marconi 6', addrComune: 'Piazza Cottolengo 49' },
+  { comune: 'Cortemilia',
+    caserma: [44.57546592, 8.19945617], municipio: [44.5846, 8.1931], cEsatta: true,
+    addrStazione: 'Corso Divisioni Alpine 109', addrComune: 'Corso Luigi Einaudi 1' },
+  { comune: 'Cravanzana',
+    caserma: [44.5815, 8.1280], municipio: [44.5826, 8.1297], cEsatta: false,
+    addrStazione: 'Via Cravanzana 115', addrComune: null },
+  { comune: 'Diano d\u2019Alba',
+    caserma: [44.6478, 8.0268], municipio: [44.6503, 8.0297], cEsatta: false,
+    addrStazione: 'Strada Provinciale Montelupo 1', addrComune: 'Via Umberto I 22' },
+  { comune: 'Govone',
+    caserma: [44.7990, 8.0975], municipio: [44.7981, 8.0962], cEsatta: false,
+    addrStazione: 'Via Marello Boetti', addrComune: 'Piazza Roma 1' },
+  { comune: 'Monesiglio',
+    caserma: [44.46623571, 8.11740764], municipio: [44.4651, 8.1185], cEsatta: true,
+    addrStazione: 'Via alla Chiesa 7', addrComune: 'Piazza XX Settembre 2' },
+  { comune: 'Neive',
+    caserma: [44.7168, 8.1225], municipio: [44.7186, 8.1239], cEsatta: false,
+    addrStazione: 'Via Bindello 16', addrComune: 'Piazza Italia 1' },
+  { comune: 'Saliceto',
+    caserma: [44.41347807, 8.1659808], municipio: [44.4166, 8.1664], cEsatta: true,
+    addrStazione: 'SP439 50', addrComune: 'Piazza Carlo Giusta 4' },
+  { comune: 'Santo Stefano Belbo',
+    caserma: [44.70777760, 8.23121113], municipio: [44.7117, 8.2244], cEsatta: true,
+    addrStazione: 'Via Cavour 2', addrComune: null }
+];
+
+/* ---------- Mappa ----------
+   Sfondi Esri (ArcGIS Online): non richiedono chiave API e funzionano anche
+   quando la pagina è aperta come file locale. */
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+const satellite = L.tileLayer(ESRI + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, maxNativeZoom: 18,
+  attribution: 'Immagini &copy; Esri, Maxar, Earthstar Geographics, GIS User Community'
+});
+const nomiLuoghi = L.tileLayer(ESRI + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, maxNativeZoom: 18, attribution: 'Nomi &copy; Esri'
+});
+const strade = L.tileLayer(ESRI + 'World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, maxNativeZoom: 18,
+  attribution: 'Mappa &copy; Esri, HERE, Garmin, OpenStreetMap contributors'
+});
+const rilievo = L.tileLayer(ESRI + 'World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, maxNativeZoom: 18,
+  attribution: 'Mappa &copy; Esri, HERE, Garmin, USGS, OpenStreetMap contributors'
+});
+const map = L.map('map', { layers: [satellite, nomiLuoghi], zoomControl: true });
+L.control.layers(
+  { 'Satellite': satellite, 'Stradale': strade, 'Rilievo': rilievo },
+  { 'Nomi dei luoghi (sul satellite)': nomiLuoghi },
+  { position: 'topright' }
+).addTo(map);
+L.control.scale({ metric: true, imperial: false }).addTo(map);
+
+const gCaserme = L.layerGroup().addTo(map);
+const gComuni  = L.layerGroup().addTo(map);
+const markers = [];
+
+function popupHtml(s, tipo) {
+  if (tipo === 'caserma') {
+    const titolo = s.compagnia ? `Compagnia e Stazione Carabinieri di ${s.comune}` : `Stazione Carabinieri di ${s.comune}`;
+    const tag = s.compagnia ? '<span class="tag compagnia">Compagnia + Stazione</span>' : '<span class="tag caserma">Stazione Carabinieri</span>';
+    const ind = (s.addrStazione ? `<p>${s.addrStazione}, ${s.comune}</p>` : `<p class="ind">Indirizzo non indicato</p>`)
+      + (s.cEsatta ? '' : `<p class="ind">Posizione sulla mappa indicativa</p>`);
+    return `<div class="popup">${tag}<h3>${titolo}</h3>${ind}</div>`;
+  }
+  const ind = (s.addrComune ? `<p>${s.addrComune}, ${s.comune}</p>` : `<p class="ind">Indirizzo non indicato</p>`)
+    + `<p class="ind">Posizione sulla mappa indicativa</p>`;
+  return `<div class="popup"><span class="tag comune">Sede comunale</span><h3>Comune di ${s.comune}</h3>${ind}</div>`;
+}
+
+SEDI.forEach(s => {
+  const mc = L.marker(s.caserma, { icon: icona('caserma', s.compagnia), zIndexOffset: s.compagnia ? 1000 : 500, title: `Stazione CC ${s.comune}` })
+    .bindPopup(popupHtml(s, 'caserma'))
+    .bindTooltip(`CC ${s.comune}`, { direction: 'top', className: 'etichetta' })
+    .addTo(gCaserme);
+  const mm = L.marker(s.municipio, { icon: icona('comune'), title: `Comune di ${s.comune}` })
+    .bindPopup(popupHtml(s, 'comune'))
+    .bindTooltip(`Comune di ${s.comune}`, { direction: 'top', className: 'etichetta' })
+    .addTo(gComuni);
+  markers.push({ s, mc, mm });
+});
+
+const bounds = L.latLngBounds(SEDI.flatMap(s => [s.caserma, s.municipio]));
+map.fitBounds(bounds.pad(0.15));
+
+/* ---------- Lista laterale ---------- */
+const lista = document.getElementById('lista');
+const miniCas = `<div class="pin caserma" style="width:20px;height:20px;border-radius:5px;border-width:1px;box-shadow:none"><svg style="width:12px;height:12px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">${SVG_CASERMA.replace(/<\/?svg[^>]*>/g,'')}</svg></div>`;
+const miniCom = `<div class="pin comune" style="width:20px;height:20px;border-width:1px;box-shadow:none"><svg style="width:12px;height:12px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">${SVG_COMUNE.replace(/<\/?svg[^>]*>/g,'')}</svg></div>`;
+
+const righe = [];   // righe[i] = { el, chk, sub }  (i = indice in SEDI; 0 = Alba)
+markers.forEach(({ s, mc, mm }, i) => {
+  const el = document.createElement('div');
+  el.className = 'riga';
+  const testa = i === 0
+    ? '<span class="num" title="Punto di partenza e di arrivo">P</span>'
+    : '<input type="checkbox" class="sel" title="Includi nei percorsi">';
+  el.innerHTML = `${testa}
+                  <div class="nome">${s.comune}<small class="sub">${i === 0 ? 'Compagnia · partenza e arrivo' : ''}</small></div>
+                  <div class="mini">${miniCas}${miniCom}</div>`;
+  el.addEventListener('click', (e) => {
+    if (e.target.closest('.sel')) return;
+    const b = L.latLngBounds([s.caserma, s.municipio]);
+    map.flyToBounds(b.pad(1.2), { maxZoom: 16, duration: 0.8 });
+    setTimeout(() => mc.openPopup(), 900);
+  });
+  lista.appendChild(el);
+  righe.push({ el, chk: el.querySelector('.sel'), sub: el.querySelector('.sub') });
+});
+
+/* ---------- Controlli ---------- */
+document.getElementById('chk-caserme').addEventListener('change', e =>
+  e.target.checked ? map.addLayer(gCaserme) : map.removeLayer(gCaserme));
+document.getElementById('chk-comuni').addEventListener('change', e =>
+  e.target.checked ? map.addLayer(gComuni) : map.removeLayer(gComuni));
+document.getElementById('chk-etichette').addEventListener('change', e => {
+  markers.forEach(({ s, mc, mm }) => {
+    mc.unbindTooltip();
+    mm.unbindTooltip();
+    if (e.target.checked) {
+      mc.bindTooltip(s.comune, { permanent: true, direction: 'left', className: 'etichetta', offset: [-4, 0] });
+      mm.bindTooltip(s.comune, { permanent: true, direction: 'right', className: 'etichetta', offset: [4, 0] });
+    } else {
+      mc.bindTooltip(`CC ${s.comune}`, { direction: 'top', className: 'etichetta' });
+      mm.bindTooltip(`Comune di ${s.comune}`, { direction: 'top', className: 'etichetta' });
+    }
+  });
+});
+
+/* =====================================================================
+   PERCORSI IN AUTO DA ALBA
+   - Tempi e distanze: matrice OSRM (rete stradale OpenStreetMap, senza traffico)
+   - Tracciati: servizio "route" di OSRM, richiesto solo per i percorsi mostrati
+   - Giro ottimizzato: ordine ottimo calcolato qui (Held-Karp, esatto) sulla matrice dei tempi
+   Se OSRM non è raggiungibile si usa una stima in linea d'aria (×1,4 a 50 km/h).
+   ===================================================================== */
+const OSRM = 'https://router.project-osrm.org';
+const COLORI = ['#ff5252', '#ffb300', '#00e5ff', '#76ff03', '#e040fb', '#ff6e40', '#40c4ff', '#ffee58', '#69f0ae', '#ff80ab'];
+const colore = i => COLORI[(i - 1) % COLORI.length];
+
+const gRotte = L.layerGroup().addTo(map);   // tracciati ed etichette dei tempi
+const gBadge = L.layerGroup().addTo(map);   // numeri d'ordine del giro
+
+const elStato = document.getElementById('stato');
+const elRis = document.getElementById('risultati');
+const elAiuto = document.getElementById('aiuto');
+const btnSingoli = document.getElementById('m-singoli');
+const btnGiro = document.getElementById('m-giro');
+
+let modo = 'singoli';          // 'singoli' | 'giro'
+const selezione = new Set();   // indici in SEDI (1..10); Alba (0) è sempre partenza/arrivo
+let M = null;                  // { dur[i][j] in s, dist[i][j] in m | null, stima: bool }
+let reqId = 0;
+
+/* ---- utilità ---- */
+function fmtDurata(sec) {
+  const m = Math.max(1, Math.round(sec / 60));
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+const fmtKm = m => `${(m / 1000).toFixed(m < 10000 ? 1 : 0).replace('.', ',')} km`;
+function haversine(a, b) {
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+const stimaDist = (i, j) => (i === j ? 0 : haversine(SEDI[i].caserma, SEDI[j].caserma) * 1.4);
+const stimaDur = (i, j) => stimaDist(i, j) / (50 / 3.6);
+
+async function fetchJSON(url) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const r = await fetch(url, { signal: ctl.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+const lonlat = idxs => idxs.map(i => `${SEDI[i].caserma[1]},${SEDI[i].caserma[0]}`).join(';');
+
+/* ---- matrice dei tempi ---- */
+async function caricaMatrice() {
+  const n = SEDI.length;
+  try {
+    const j = await fetchJSON(`${OSRM}/table/v1/driving/${lonlat([...Array(n).keys()])}?annotations=duration,distance`);
+    if (j.code !== 'Ok' || !j.durations) throw new Error(j.code || 'risposta non valida');
+    const dur = j.durations.map((r, a) => r.map((v, b) => (v == null ? stimaDur(a, b) : v)));
+    const dist = j.distances ? j.distances.map((r, a) => r.map((v, b) => (v == null ? stimaDist(a, b) : v))) : null;
+    M = { dur, dist, stima: false };
+  } catch (err) {
+    console.warn('OSRM non raggiungibile, uso la stima in linea d’aria:', err);
+    const idx = [...Array(n).keys()];
+    M = {
+      dur: idx.map(a => idx.map(b => stimaDur(a, b))),
+      dist: idx.map(a => idx.map(b => stimaDist(a, b))),
+      stima: true
+    };
+  }
+}
+
+/* ---- tracciato tra una sequenza di tappe (cache) ---- */
+const cacheRotte = new Map();
+function rotta(seq) {
+  const key = seq.join('-');
+  if (!cacheRotte.has(key)) {
+    cacheRotte.set(key, (async () => {
+      const dritta = () => ({
+        latlngs: seq.map(i => SEDI[i].caserma),
+        dist: seq.slice(1).reduce((s, v, k) => s + (M.dist ? M.dist[seq[k]][v] : stimaDist(seq[k], v)), 0),
+        approx: true
+      });
+      if (M.stima) return dritta();
+      try {
+        const j = await fetchJSON(`${OSRM}/route/v1/driving/${lonlat(seq)}?overview=full&geometries=geojson&steps=false`);
+        if (j.code !== 'Ok' || !j.routes || !j.routes[0]) throw new Error(j.code);
+        const r = j.routes[0];
+        return { latlngs: r.geometry.coordinates.map(c => [c[1], c[0]]), dist: r.distance, approx: false };
+      } catch (err) {
+        console.warn('Tracciato non disponibile, uso una linea retta:', err);
+        return dritta();
+      }
+    })());
+  }
+  return cacheRotte.get(key);
+}
+
+/* ---- giro ottimo con rientro ad Alba (Held-Karp, esatto) ---- */
+function giroOttimo(stops) {
+  const n = stops.length;
+  if (n === 0) return null;
+  const D = (a, b) => M.dur[a][b];
+  const N = 1 << n;
+  const dp = Array.from({ length: N }, () => new Array(n).fill(Infinity));
+  const prev = Array.from({ length: N }, () => new Array(n).fill(-1));
+  for (let i = 0; i < n; i++) dp[1 << i][i] = D(0, stops[i]);
+  for (let mask = 1; mask < N; mask++) {
+    for (let last = 0; last < n; last++) {
+      const c0 = dp[mask][last];
+      if (!(mask & (1 << last)) || c0 === Infinity) continue;
+      for (let nx = 0; nx < n; nx++) {
+        if (mask & (1 << nx)) continue;
+        const nm = mask | (1 << nx);
+        const c = c0 + D(stops[last], stops[nx]);
+        if (c < dp[nm][nx]) { dp[nm][nx] = c; prev[nm][nx] = last; }
+      }
+    }
+  }
+  let best = Infinity, bl = -1;
+  for (let last = 0; last < n; last++) {
+    const c = dp[N - 1][last] + D(stops[last], 0);
+    if (c < best) { best = c; bl = last; }
+  }
+  const ordine = [];
+  let mask = N - 1, cur = bl;
+  while (cur !== -1) { ordine.push(stops[cur]); const p = prev[mask][cur]; mask &= ~(1 << cur); cur = p; }
+  ordine.reverse();
+  return { ordine, tempo: best };
+}
+
+/* ---- disegno ---- */
+function disegnaLinea(latlngs, col, tratteggio) {
+  L.polyline(latlngs, { color: '#ffffff', weight: 8, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }).addTo(gRotte);
+  L.polyline(latlngs, { color: col, weight: 4.5, opacity: 1, lineCap: 'round', lineJoin: 'round', dashArray: tratteggio ? '8 8' : null }).addTo(gRotte);
+}
+function etichettaDurata(latlngs, testo, col) {
+  const p = latlngs[Math.floor(latlngs.length / 2)];
+  L.marker(p, {
+    icon: L.divIcon({ className: '', html: `<div class="dur" style="--c:${col}">${testo}</div>`, iconSize: [0, 0] }),
+    interactive: false, zIndexOffset: 2000
+  }).addTo(gRotte);
+}
+function badge(i, testo, cls) {
+  const size = SEDI[i].compagnia ? 36 : 34;
+  L.marker(SEDI[i].caserma, {
+    icon: L.divIcon({ className: '', html: `<div class="badge ${cls || ''}">${testo}</div>`, iconSize: [20, 20], iconAnchor: [24, size] }),
+    interactive: false, zIndexOffset: 3000
+  }).addTo(gBadge);
+}
+function inquadra() {
+  const b = gRotte.getBounds();
+  if (b.isValid() && !map.getBounds().contains(b)) map.fitBounds(b.pad(0.12));
+}
+function setStato(testo, errore) {
+  elStato.textContent = testo || '';
+  elStato.className = 'stato' + (errore ? ' err' : '');
+}
+function avvisoStima() {
+  return M && M.stima
+    ? 'Servizio di calcolo percorsi non raggiungibile: tempi stimati in linea d’aria (×1,4 a 50 km/h) e tracciati rettilinei tratteggiati.'
+    : '';
+}
+
+/* ---- aggiornamento di tutto ---- */
+async function aggiornaPercorsi() {
+  const mio = ++reqId;
+  gRotte.clearLayers();
+  gBadge.clearLayers();
+  elRis.innerHTML = '';
+  if (!M) return;
+  if (selezione.size === 0) { setStato(avvisoStima(), M.stima); return; }
+  setStato('Calcolo dei percorsi…');
+
+  const idxs = [...selezione].sort((a, b) => a - b);
+
+  if (modo === 'singoli') {
+    const ris = await Promise.all(idxs.map(i => rotta([0, i])));
+    if (mio !== reqId) return;
+    const ol = document.createElement('ol');
+    idxs.forEach((i, k) => {
+      const r = ris[k], col = colore(i), tempo = M.dur[0][i];
+      disegnaLinea(r.latlngs, col, r.approx);
+      etichettaDurata(r.latlngs, `${SEDI[i].comune} · ${fmtDurata(tempo)}`, col);
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="dot" style="background:${col}"></span><span>${SEDI[i].comune}</span><span class="t">${fmtDurata(tempo)} · ${fmtKm(r.dist)}</span>`;
+      ol.appendChild(li);
+    });
+    badge(0, 'P', 'p');
+    elRis.appendChild(ol);
+    const nota = document.createElement('p');
+    nota.className = 'aiuto';
+    nota.textContent = 'Durate di sola andata da Alba; il ritorno è indicato nell’elenco sotto.';
+    elRis.appendChild(nota);
+  } else {
+    const g = giroOttimo(idxs);
+    const seq = [0, ...g.ordine, 0];
+    const r = await rotta(seq);
+    if (mio !== reqId) return;
+    disegnaLinea(r.latlngs, '#ff3d00', r.approx);
+    badge(0, 'P', 'p');
+    g.ordine.forEach((i, k) => badge(i, String(k + 1)));
+
+    const ol = document.createElement('ol');
+    const riga = (num, nome, extra) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="num">${num}</span><span>${nome}</span>${extra ? `<span class="t">${extra}</span>` : ''}`;
+      ol.appendChild(li);
+    };
+    const tratto = (da, a) => {
+      const li = document.createElement('li');
+      li.className = 'tratto';
+      li.textContent = `↓ ${fmtDurata(M.dur[da][a])}${M.dist ? ' · ' + fmtKm(M.dist[da][a]) : ''}`;
+      ol.appendChild(li);
+    };
+    riga('P', 'Alba (partenza)');
+    let da = 0;
+    g.ordine.forEach((i, k) => { tratto(da, i); riga(k + 1, SEDI[i].comune); da = i; });
+    tratto(da, 0);
+    riga('P', 'Alba (rientro)');
+    elRis.appendChild(ol);
+
+    const separati = idxs.reduce((s, i) => s + M.dur[0][i] + M.dur[i][0], 0);
+    const risp = separati - g.tempo;
+    const tot = document.createElement('div');
+    tot.className = 'totale';
+    tot.innerHTML = `<b>Totale: ${fmtDurata(g.tempo)}</b> · ${fmtKm(r.dist)}<br>`
+      + `<span style="color:var(--muted);font-size:12px">Solo guida, senza soste.`
+      + (idxs.length > 1 && risp >= 60 ? ` Rispetto a ${idxs.length} viaggi separati andata e ritorno (${fmtDurata(separati)}) risparmi circa ${fmtDurata(risp)}.` : '')
+      + `</span>`;
+    elRis.appendChild(tot);
+  }
+  setStato(avvisoStima(), M.stima);
+  inquadra();
+}
+
+function aggiornaRighe() {
+  righe.forEach((r, i) => {
+    if (i === 0) return;
+    r.sub.textContent = `andata ${fmtDurata(M.dur[0][i])} · ritorno ${fmtDurata(M.dur[i][0])}`;
+  });
+}
+function aggiornaAiuto() {
+  elAiuto.textContent = modo === 'singoli'
+    ? 'Spunta una o più Stazioni nell’elenco: ognuna avrà il suo percorso da Alba, con la durata in auto.'
+    : 'Spunta le Stazioni da visitare: il giro parte da Alba, tocca tutte le selezionate nell’ordine più breve e rientra ad Alba.';
+}
+function impostaModo(m) {
+  modo = m;
+  btnSingoli.classList.toggle('on', m === 'singoli');
+  btnGiro.classList.toggle('on', m === 'giro');
+  aggiornaAiuto();
+  aggiornaPercorsi();
+}
+
+btnSingoli.addEventListener('click', () => impostaModo('singoli'));
+btnGiro.addEventListener('click', () => impostaModo('giro'));
+document.getElementById('sel-tutte').addEventListener('click', () => {
+  righe.forEach((r, i) => { if (i > 0) { r.chk.checked = true; selezione.add(i); } });
+  aggiornaPercorsi();
+});
+document.getElementById('sel-nessuna').addEventListener('click', () => {
+  righe.forEach((r, i) => { if (i > 0) r.chk.checked = false; });
+  selezione.clear();
+  aggiornaPercorsi();
+});
+righe.forEach((r, i) => {
+  if (i === 0) return;
+  r.chk.addEventListener('change', () => {
+    r.chk.checked ? selezione.add(i) : selezione.delete(i);
+    aggiornaPercorsi();
+  });
+});
+
+aggiornaAiuto();
+setStato('Calcolo dei tempi di percorrenza…');
+caricaMatrice().then(() => { aggiornaRighe(); setStato(avvisoStima(), M.stima); aggiornaPercorsi(); });
+</script>
+
+<script>
+/* =====================================================================
+   ISPEZIONI MENSILI — promemoria e registro (Stazioni e Pattuglie)
+   Le spunte sono salvate nel browser (localStorage) e si possono
+   esportare/importare come copia di sicurezza (.json).
+   Script separato: funziona anche se la mappa non riesce a caricarsi.
+   ===================================================================== */
+(function () {
+  const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+  const KEY = 'ispezioni-carabinieri-v1';
+  const pad = n => String(n).padStart(2, '0');
+  const isoOggi = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const chiave = (a, m) => `${a}-${pad(m + 1)}`;
+
+  /* una voce "Stazione" e una voce "Pattuglia" per ogni sede */
+  const VOCI = SEDI.map(s => ({ comune: s.comune, compagnia: !!s.compagnia, s: s.comune + '|S', p: s.comune + '|P' }));
+  const TOT = VOCI.length * 2;
+  const ID_VALIDI = new Set(VOCI.flatMap(v => [v.s, v.p]));
+
+  /* ---- salvataggio ---- */
+  let dati = {};            // { "2026-11": { "Alba|S": "2026-11-16", ... } }
+  let storageOk = true;
+  try {
+    const t = localStorage.getItem(KEY);
+    dati = t ? JSON.parse(t) : {};
+    if (!dati || typeof dati !== 'object') dati = {};
+    localStorage.setItem(KEY + '-test', '1'); localStorage.removeItem(KEY + '-test');
+  } catch (e) { storageOk = false; }
+  function salva() {
+    try { localStorage.setItem(KEY, JSON.stringify(dati)); }
+    catch (e) { storageOk = false; document.getElementById('isp-storage').hidden = false; }
+  }
+  document.getElementById('isp-storage').hidden = storageOk;
+
+  /* ---- elementi e stato ---- */
+  const $ = id => document.getElementById(id);
+  const elApp = document.querySelector('.app'), elVista = $('isp');
+  const tabMappa = $('tab-mappa'), tabIsp = $('tab-isp');
+  const ora0 = new Date();
+  let anno = ora0.getFullYear(), mese = ora0.getMonth(), soloDaFare = false;
+
+  const conta = (a, m) => {
+    const x = dati[chiave(a, m)] || {};
+    return [...ID_VALIDI].filter(id => id in x).length;
+  };
+
+  /* ---- promemoria sul mese in corso ---- */
+  function promemoria(adesso) {
+    const a0 = adesso.getFullYear(), m0 = adesso.getMonth();
+    const x = dati[chiave(a0, m0)] || {};
+    let mS = 0, mP = 0;
+    VOCI.forEach(v => { if (!(v.s in x)) mS++; if (!(v.p in x)) mP++; });
+    const mancano = mS + mP;
+    if (!mancano) return { ok: true, mancano: 0, a0, m0, html: `✓ Tutte le ispezioni di <b>${MESI[m0]} ${a0}</b> sono state completate.` };
+    const restano = new Date(a0, m0 + 1, 0).getDate() - adesso.getDate();
+    const quando = restano === 0 ? 'oggi è l’ultimo giorno del mese' : restano === 1 ? 'resta 1 giorno' : `restano ${restano} giorni`;
+    return {
+      ok: false, mancano, a0, m0,
+      html: `<b>${MESI[m0]} ${a0}</b> — mancano ${mancano} ${mancano === 1 ? 'voce' : 'voci'} su ${TOT}: `
+        + `<b>${mS}</b> ${mS === 1 ? 'Stazione' : 'Stazioni'} e <b>${mP}</b> ${mP === 1 ? 'Pattuglia' : 'Pattuglie'} da ispezionare (${quando}).`
+    };
+  }
+
+  /* ---- disegno ---- */
+  function render() {
+    const adesso = new Date();
+    const a0 = adesso.getFullYear(), m0 = adesso.getMonth();
+    $('isp-anno').textContent = anno;
+
+    // promemoria + badge del tab
+    const pr = promemoria(adesso);
+    const elPr = $('promemoria');
+    elPr.className = 'promemoria' + (pr.ok ? ' ok' : '');
+    const inCorso = anno === a0 && mese === m0;
+    elPr.innerHTML = `<span>${pr.html}</span>` + (inCorso ? '' : '<button type="button" class="btn" id="vai-corrente">Apri il mese in corso</button>');
+    const bd = $('isp-badge');
+    bd.textContent = pr.ok ? '✓' : String(pr.mancano);
+    bd.className = 'tbadge' + (pr.ok ? ' ok' : '');
+    bd.title = pr.ok ? 'Mese in corso completato' : `${pr.mancano} da fare nel mese in corso`;
+
+    // griglia dei 12 mesi
+    $('mesi').innerHTML = MESI.map((nome, i) => {
+      const f = conta(anno, i);
+      const cls = ['mese', i === mese ? 'on' : '', anno === a0 && i === m0 ? 'cur' : '', f === TOT ? 'fatto' : ''].join(' ').replace(/\s+/g, ' ').trim();
+      return `<button type="button" class="${cls}" data-m="${i}"><span class="m">${nome}</span>`
+        + `<span class="c">${f === TOT ? 'Completo ✓' : `${f} / ${TOT}`}</span>`
+        + `<span class="barra"><i style="width:${(f / TOT * 100).toFixed(1)}%"></i></span></button>`;
+    }).join('');
+
+    // dettaglio del mese selezionato
+    const x = dati[chiave(anno, mese)] || {};
+    const f = conta(anno, mese);
+    $('dett-titolo').textContent = `${MESI[mese]} ${anno}`;
+    $('dett-prog').textContent = `${f} di ${TOT} completate`;
+    $('dett-barra').style.width = `${(f / TOT * 100).toFixed(1)}%`;
+
+    const voce = (id, tipo, testo, extra, n) => {
+      const on = id in x;
+      return `<div class="voce ${tipo}${on ? ' on' : ''}">`
+        + `<input type="checkbox" id="v${n}${tipo}" data-id="${esc(id)}"${on ? ' checked' : ''}>`
+        + `<label for="v${n}${tipo}">${esc(testo)}${extra || ''}</label>`
+        + `<input type="date" class="data" data-id="${esc(id)}" value="${esc(x[id] || '')}" aria-label="Data ispezione"></div>`;
+    };
+    let html = '', mostrate = 0;
+    VOCI.forEach((v, n) => {
+      const sOn = v.s in x, pOn = v.p in x;
+      if (soloDaFare && sOn && pOn) return;
+      const righe = [];
+      if (!(soloDaFare && sOn)) righe.push(voce(v.s, 's', `Stazione Carabinieri di ${v.comune}`, v.compagnia ? '<span class="pill">Compagnia</span>' : '', n));
+      if (!(soloDaFare && pOn)) righe.push(voce(v.p, 'p', `Pattuglia ${v.comune}`, '', n));
+      mostrate++;
+      html += `<div class="gruppo${sOn && pOn ? ' fatto' : ''}">${righe.join('')}</div>`;
+    });
+    if (!mostrate) html = `<div class="vuoto">✓ Tutto completato per ${MESI[mese]} ${anno}</div>`;
+    $('elenco').innerHTML = html;
+  }
+
+  /* ---- messaggi ---- */
+  let tMsg = null;
+  function msg(testo, errore) {
+    const el = $('isp-msg');
+    el.textContent = testo || '';
+    el.className = 'msg' + (errore ? ' err' : '');
+    clearTimeout(tMsg);
+    if (testo) tMsg = setTimeout(() => { el.textContent = ''; }, 6000);
+  }
+
+  /* ---- interazioni ---- */
+  $('elenco').addEventListener('change', e => {
+    const t = e.target, id = t.dataset && t.dataset.id;
+    if (!id) return;
+    const k = chiave(anno, mese);
+    const m = dati[k] = dati[k] || {};
+    if (t.type === 'checkbox') {
+      if (t.checked) m[id] = isoOggi(); else delete m[id];
+    } else if (t.type === 'date') {
+      m[id] = t.value || isoOggi();
+    }
+    if (!Object.keys(m).length) delete dati[k];
+    salva();
+    render();
+  });
+  $('mesi').addEventListener('click', e => {
+    const b = e.target.closest('.mese');
+    if (!b) return;
+    mese = Number(b.dataset.m);
+    render();
+  });
+  $('promemoria').addEventListener('click', e => {
+    if (!e.target.closest('#vai-corrente')) return;
+    const d = new Date(); anno = d.getFullYear(); mese = d.getMonth();
+    render();
+  });
+  $('anno-prec').addEventListener('click', () => { anno--; render(); });
+  $('anno-succ').addEventListener('click', () => { anno++; render(); });
+  $('solo-da-fare').addEventListener('change', e => { soloDaFare = e.target.checked; render(); });
+
+  /* azzera mese: serve una seconda pressione per confermare */
+  let timerAzzera = null;
+  const btnAzzera = $('isp-azzera');
+  function disarma() { clearTimeout(timerAzzera); timerAzzera = null; btnAzzera.textContent = 'Azzera questo mese'; btnAzzera.classList.remove('pericolo'); }
+  btnAzzera.addEventListener('click', () => {
+    if (!timerAzzera) {
+      btnAzzera.textContent = `Conferma: azzera ${MESI[mese]} ${anno}`;
+      btnAzzera.classList.add('pericolo');
+      timerAzzera = setTimeout(disarma, 4000);
+    } else {
+      disarma();
+      delete dati[chiave(anno, mese)];
+      salva(); render();
+      msg(`${MESI[mese]} ${anno} azzerato.`);
+    }
+  });
+
+  /* copia di sicurezza */
+  $('isp-esporta').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify({ versione: 1, esportato: new Date().toISOString(), dati }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `ispezioni-carabinieri-${isoOggi()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    msg('Copia salvata nei download del browser.');
+  });
+  $('isp-importa').addEventListener('click', () => $('isp-file').click());
+  $('isp-file').addEventListener('change', async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      const j = JSON.parse(await f.text());
+      if (!j || !j.dati || typeof j.dati !== 'object') throw new Error('formato');
+      let n = 0;
+      for (const [k, v] of Object.entries(j.dati)) {
+        if (!/^\d{4}-\d{2}$/.test(k) || !v || typeof v !== 'object') continue;
+        const m = dati[k] = dati[k] || {};
+        for (const [id, d] of Object.entries(v)) {
+          if (ID_VALIDI.has(id) && typeof d === 'string' && !(id in m)) { m[id] = d; n++; }
+        }
+        if (!Object.keys(m).length) delete dati[k];
+      }
+      salva(); render();
+      msg(`Copia ripristinata: ${n} ${n === 1 ? 'voce aggiunta' : 'voci aggiunte'} (quelle già spuntate restano com’erano).`);
+    } catch (err) {
+      msg('File non valido: scegli una copia salvata da questa pagina.', true);
+    }
+    e.target.value = '';
+  });
+
+  /* ---- cambio tab ---- */
+  function mostra(vista) {
+    const isp = vista === 'isp';
+    elApp.classList.toggle('off', isp);
+    elVista.classList.toggle('off', !isp);
+    tabMappa.classList.toggle('on', !isp);
+    tabIsp.classList.toggle('on', isp);
+    tabMappa.setAttribute('aria-selected', String(!isp));
+    tabIsp.setAttribute('aria-selected', String(isp));
+    if (isp) render();
+    else { try { map.invalidateSize(); } catch (e) { /* mappa non disponibile */ } }
+  }
+  tabMappa.addEventListener('click', () => mostra('mappa'));
+  tabIsp.addEventListener('click', () => mostra('isp'));
+
+  render();   // aggiorna subito il badge sul tab
+})();
+</script>
+</body>
+</html>

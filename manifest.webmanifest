@@ -1,0 +1,14 @@
+{
+  "name": "Stazioni Carabinieri · Langhe e Roero",
+  "short_name": "Stazioni CC",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0b2a5b",
+  "theme_color": "#0b2a5b",
+  "lang": "it",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
